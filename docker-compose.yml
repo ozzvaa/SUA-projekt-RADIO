@@ -1,0 +1,19 @@
+name: radiologniki
+
+services:
+  swagger-ui:
+    container_name: swagger-docs
+    image: docker.swagger.io/swaggerapi/swagger-ui
+    ports:
+      - "8081:8080"
+    environment:
+      URLS: '[{"url":"/specs/weather.yaml","name":"Weather"},{"url":"/specs/traffic.yaml","name":"Traffic"},{"url":"/specs/obituaries.yaml","name":"Obituaries"},{"url":"/specs/notifications.yaml","name":"Notifications"},{"url":"/specs/ads.yaml","name":"Advertisements"},{"url":"/specs/payments.yaml","name":"Payments"},{"url":"/specs/users.yaml","name":"Users"}]'
+      URLS_PRIMARY_NAME: Users
+    volumes:
+      - ./services/weather/openapi.yaml:/usr/share/nginx/html/specs/weather.yaml:ro
+      - ./services/traffic/openapi.yaml:/usr/share/nginx/html/specs/traffic.yaml:ro
+      - ./services/obituaries/openapi.yaml:/usr/share/nginx/html/specs/obituaries.yaml:ro
+      - ./services/notifications/openapi.yaml:/usr/share/nginx/html/specs/notifications.yaml:ro
+      - ./services/payments/openapi.yaml:/usr/share/nginx/html/specs/payments.yaml:ro
+      - ./services/users/openapi.yaml:/usr/share/nginx/html/specs/users.yaml:ro
+      - ./services/ads/openapi.yaml:/usr/share/nginx/html/specs/ads.yaml:ro

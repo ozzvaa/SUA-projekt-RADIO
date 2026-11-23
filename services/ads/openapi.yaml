@@ -1,0 +1,88 @@
+openapi: 3.1.0
+info:
+  title: Advertising API
+  version: 1.0.0
+  description: API for viewing and managing advertisements.
+servers:
+  - url: http://localhost:8080
+    description: Local API gateway
+tags:
+  - name: Advertisements
+paths:
+  /ads:
+    get:
+      tags: [Advertisements]
+      operationId: listAds
+      summary: List advertisements
+      responses:
+        '200':
+          description: List of advertisements
+          content:
+            application/json: {}
+    post:
+      tags: [Advertisements]
+      operationId: createAd
+      summary: Add an advertisement
+      requestBody:
+        required: true
+        content:
+          application/json: {}
+      responses:
+        '201':
+          description: Advertisement created
+          content:
+            application/json: {}
+        '400':
+          description: Invalid advertisement data
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /ads/{id}:
+    put:
+      tags: [Advertisements]
+      operationId: updateAd
+      summary: Replace an advertisement
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+      requestBody:
+        required: true
+        content:
+          application/json: {}
+      responses:
+        '200':
+          description: Advertisement updated
+          content:
+            application/json: {}
+        '404':
+          description: Advertisement not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    delete:
+      tags: [Advertisements]
+      operationId: deleteAd
+      summary: Delete an advertisement
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '204':
+          description: Advertisement deleted
+        '404':
+          description: Advertisement not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+components:
+  parameters:
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+      description: Advertisement identifier.
+  schemas:
+    Error:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }

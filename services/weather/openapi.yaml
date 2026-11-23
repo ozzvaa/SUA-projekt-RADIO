@@ -1,0 +1,70 @@
+openapi: 3.1.0
+info:
+  title: Weather API
+  version: 1.0.0
+  description: API for current weather conditions and forecasts.
+servers:
+  - url: http://localhost:8080
+    description: Local API gateway
+tags:
+  - name: Weather
+paths:
+  /weather:
+    get:
+      tags: [Weather]
+      operationId: getCurrentWeather
+      summary: Get current weather
+      parameters:
+        - name: location
+          in: query
+          required: true
+          schema: { type: string }
+          description: City or other location for the weather report.
+      responses:
+        '200':
+          description: Current weather for the requested location
+          content:
+            application/json: {}
+        '400':
+          description: Location is missing or invalid
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: Weather data is unavailable for this location
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /weather/forecast:
+    get:
+      tags: [Weather]
+      operationId: getWeatherForecast
+      summary: Get a weather forecast
+      parameters:
+        - name: location
+          in: query
+          required: true
+          schema: { type: string }
+          description: City or other location for the forecast.
+      responses:
+        '200':
+          description: Forecast for the requested location
+          content:
+            application/json: {}
+        '400':
+          description: Location is missing or invalid
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: Forecast data is unavailable for this location
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+components:
+  schemas:
+    Error:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }

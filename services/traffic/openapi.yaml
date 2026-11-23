@@ -1,0 +1,43 @@
+openapi: 3.1.0
+info:
+  title: Traffic API
+  version: 1.0.0
+  description: API for traffic conditions, incidents, congestion, and road closures.
+servers:
+  - url: http://localhost:8080
+    description: Local API gateway
+tags:
+  - name: Traffic
+paths:
+  /traffic:
+    get:
+      tags: [Traffic]
+      operationId: getTrafficInformation
+      summary: Get traffic information
+      parameters:
+        - name: area
+          in: query
+          required: false
+          schema: { type: string }
+          description: Optional area to filter traffic information.
+      responses:
+        '200':
+          description: Traffic information
+          content:
+            application/json: {}
+  /traffic/incidents:
+    get:
+      tags: [Traffic]
+      operationId: getTrafficIncidents
+      summary: Get traffic incidents and congestion
+      parameters:
+        - name: area
+          in: query
+          required: false
+          schema: { type: string }
+          description: Optional area to filter incidents.
+      responses:
+        '200':
+          description: Traffic incidents
+          content:
+            application/json: {}

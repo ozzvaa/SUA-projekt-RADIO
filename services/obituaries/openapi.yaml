@@ -1,0 +1,70 @@
+openapi: 3.1.0
+info:
+  title: Obituaries API
+  version: 1.0.0
+  description: API for listing, viewing, and publishing obituaries.
+servers:
+  - url: http://localhost:8080
+    description: Local API gateway
+tags:
+  - name: Obituaries
+paths:
+  /obituaries:
+    get:
+      tags: [Obituaries]
+      operationId: listObituaries
+      summary: List obituaries
+      responses:
+        '200':
+          description: List of obituaries
+          content:
+            application/json: {}
+    post:
+      tags: [Obituaries]
+      operationId: createObituary
+      summary: Add an obituary
+      requestBody:
+        required: true
+        content:
+          application/json: {}
+      responses:
+        '201':
+          description: Obituary created
+          content:
+            application/json: {}
+        '400':
+          description: Invalid obituary data
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /obituaries/{id}:
+    get:
+      tags: [Obituaries]
+      operationId: getObituary
+      summary: Get an obituary by ID
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '200':
+          description: Obituary details
+          content:
+            application/json: {}
+        '404':
+          description: Obituary not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+components:
+  parameters:
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+      description: Obituary identifier.
+  schemas:
+    Error:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }

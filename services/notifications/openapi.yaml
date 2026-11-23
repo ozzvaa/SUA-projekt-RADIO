@@ -1,0 +1,74 @@
+openapi: 3.1.0
+info:
+  title: Notifications API
+  version: 1.0.0
+  description: API for sending and managing notifications for users.
+servers:
+  - url: http://localhost:8080
+    description: Local API gateway
+tags:
+  - name: Notifications
+paths:
+  /notifications:
+    get:
+      tags: [Notifications]
+      operationId: listNotifications
+      summary: List notifications
+      parameters:
+        - name: userId
+          in: query
+          required: true
+          schema: { type: string }
+          description: User whose notifications should be returned.
+      responses:
+        '200':
+          description: Notifications for the user
+          content:
+            application/json: {}
+    post:
+      tags: [Notifications]
+      operationId: sendNotification
+      summary: Send a notification
+      requestBody:
+        required: true
+        content:
+          application/json: {}
+      responses:
+        '201':
+          description: Notification created
+          content:
+            application/json: {}
+        '400':
+          description: Invalid notification data
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /notifications/{id}/read:
+    patch:
+      tags: [Notifications]
+      operationId: markNotificationRead
+      summary: Mark a notification as read
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '204':
+          description: Notification marked as read
+        '404':
+          description: Notification not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+components:
+  parameters:
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+      description: Notification identifier.
+  schemas:
+    Error:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
