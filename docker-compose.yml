@@ -1,11 +1,12 @@
 name: radiologniki
-
 services:
   swagger-ui:
     container_name: swagger-docs
     image: docker.swagger.io/swaggerapi/swagger-ui
     ports:
-      - "8081:8080"
+      - "${SWAGGER_PORT:-8081}:8080"
+    networks:
+      - sua-services-network
     environment:
       URLS: '[{"url":"/specs/weather.yaml","name":"Weather"},{"url":"/specs/traffic.yaml","name":"Traffic"},{"url":"/specs/obituaries.yaml","name":"Obituaries"},{"url":"/specs/notifications.yaml","name":"Notifications"},{"url":"/specs/ads.yaml","name":"Advertisements"},{"url":"/specs/payments.yaml","name":"Payments"},{"url":"/specs/users.yaml","name":"Users"}]'
       URLS_PRIMARY_NAME: Users
@@ -17,3 +18,39 @@ services:
       - ./services/payments/openapi.yaml:/usr/share/nginx/html/specs/payments.yaml:ro
       - ./services/users/openapi.yaml:/usr/share/nginx/html/specs/users.yaml:ro
       - ./services/ads/openapi.yaml:/usr/share/nginx/html/specs/ads.yaml:ro
+
+  users-db:
+    image: mongo:8
+    restart: unless-stopped
+    ports:
+      - "${USERS_DATABASE_PORT:-7001}:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - sua-services-network
+  
+  users-api:
+    build: ./services/users
+    restart: unless-stopped
+    environment:
+      USERS_DATABASE_URL: ${USERS_DATABASE_URL:-mongodb://users-db:27017/users_db}
+    ports:
+      - "${USERS_API_PORT:-9001}:8000"
+    networks:
+      - sua-services-network
+    depends_on:
+      users-db:
+        condition: service_healthy
+  
+volumes:
+  mongo_data:
+
+networks:
+  sua-services-network:
+    external: true
+    name: sua-services-network

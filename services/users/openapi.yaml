@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: API for user registration, login, and account management.
 servers:
-  - url: http://localhost:8080
+  - url: http://localhost:9001
     description: Local API gateway
 tags:
   - name: Users
