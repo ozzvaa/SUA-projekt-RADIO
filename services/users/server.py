@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from typing import Optional, Literal
 
 import bcrypt
-from fastapi import FastAPI, HTTPException, status, Depends, Header
+from fastapi import FastAPI, HTTPException, status, Depends
 from pydantic import ValidationError
 from pymongo import MongoClient
 from pymongo.errors import DuplicateKeyError
@@ -16,7 +16,6 @@ from Users.Types import LoginCredentials, UserUpdate, RegisterCredentials, UserR
 from bson import ObjectId
 
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi import Depends, HTTPException
 
 security = HTTPBearer()
 
@@ -77,7 +76,8 @@ def get_current_user(
         payload = jwt.decode(
             credentials.credentials,
             SECRET_KEY,
-            algorithms=[ALGORITHM]
+            algorithms=[ALGORITHM],
+            options={"require": ["sub", "exp", "iat", "role"]}
         )
 
         return JWTPayload.model_validate(payload)
@@ -174,6 +174,8 @@ def login_user(credentials: LoginCredentials):
     )
 
     return JWTResponse(
+        message="User logged in successfully",
+        username=user["username"],
         access_token=token,
         token_type="bearer"
     )
@@ -181,6 +183,9 @@ def login_user(credentials: LoginCredentials):
 @app.put("/users/update")
 def update_user(updates: UserUpdate, current_user: JWTPayload = Depends(get_current_user)):
     user_id = current_user.sub
+
+    if not ObjectId.is_valid(user_id):
+        raise HTTPException(status_code=401, detail="Invalid user ID in token")
 
     update_data = updates.model_dump(exclude_unset=True, exclude_none=True)
 
@@ -208,6 +213,25 @@ def update_user(updates: UserUpdate, current_user: JWTPayload = Depends(get_curr
         raise HTTPException(status_code=404, detail="User not found")
 
     return {"message": "User updated successfully"}
+
+@app.put("/users/change_role")
+def update_role(new_role: Literal["user", "station"], current_user: JWTPayload = Depends(get_current_user)):
+    user_id = current_user.sub
+
+    if not ObjectId.is_valid(user_id):
+        raise HTTPException(status_code=401, detail="Invalid user ID in token")
+
+    result = app.state.users.update_one(
+        {"_id": ObjectId(user_id)},
+        {"$set": {"role": new_role}},
+    )
+
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {"message": "Role updated successfully"}
+
+
 
 @app.post("/users/authenticate")
 def authenticate(current_user: JWTPayload = Depends(get_current_user)):

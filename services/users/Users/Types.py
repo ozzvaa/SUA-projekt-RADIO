@@ -20,7 +20,6 @@ class UserUpdate(BaseModel):
     username: Optional[str] = None
     email: Optional[str] = None
     password: Optional[str] = None
-    role: Optional[Literal["user", "station"]] = None
 
 class UserResponse(BaseModel):
     id: str
@@ -34,6 +33,8 @@ class UserDetails(BaseModel):
     role: Literal["user", "station"]
 
 class JWTResponse(BaseModel):
+    message: str
+    username: str
     access_token: str
     token_type: Literal["bearer"] = "bearer"
 
