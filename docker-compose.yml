@@ -39,6 +39,7 @@ services:
     restart: unless-stopped
     environment:
       USERS_DATABASE_URL: ${USERS_DATABASE_URL:-mongodb://users-db:27017/users_db}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
     ports:
       - "${USERS_API_PORT:-9001}:8000"
     networks:

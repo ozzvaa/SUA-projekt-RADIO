@@ -32,3 +32,18 @@ class UserDetails(BaseModel):
     username: str
     email: Optional[str] = None
     role: Literal["user", "station"]
+
+class JWTResponse(BaseModel):
+    access_token: str
+    token_type: Literal["bearer"] = "bearer"
+
+class JWTPayload(BaseModel):
+    sub: str
+    role: Literal["user", "station"]
+    exp: int
+    iat: int
+
+class AuthenticateResponse(BaseModel):
+    authenticated: bool
+    user_id: str
+    role: Literal["user", "station"]

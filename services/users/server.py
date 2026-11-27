@@ -1,17 +1,33 @@
+from datetime import datetime, timedelta, timezone
 import os
+import jwt
 from contextlib import asynccontextmanager
 from typing import Optional, Literal
 
 import bcrypt
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Depends, Header
+from pydantic import ValidationError
 from pymongo import MongoClient
 from pymongo.errors import DuplicateKeyError
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
-from Users.Types import LoginCredentials, UserUpdate, RegisterCredentials, UserResponse, UserDetails, RegisterResponse
+from Users.Types import LoginCredentials, UserUpdate, RegisterCredentials, UserResponse, UserDetails, RegisterResponse, \
+    JWTResponse, AuthenticateResponse, JWTPayload
 from bson import ObjectId
 
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends, HTTPException
+
+security = HTTPBearer()
+
 load_dotenv()
+
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+ALGORITHM = os.getenv("HASH_ALG", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+if not SECRET_KEY:
+    raise RuntimeError("JWT_SECRET_KEY is not configured")
 
 
 @asynccontextmanager
@@ -35,6 +51,48 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def create_access_token(user_id: str, role: str) -> str:
+    iat = datetime.now(timezone.utc)
+
+    expire = iat + timedelta(
+        minutes=ACCESS_TOKEN_EXPIRE_MINUTES
+    )
+
+    payload = {
+        "sub": user_id,
+        "role": role,
+        "iat": iat,
+        "exp": expire
+    }
+
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def get_current_user(
+        credentials: HTTPAuthorizationCredentials = Depends(security)
+) -> JWTPayload:
+    try:
+        payload = jwt.decode(
+            credentials.credentials,
+            SECRET_KEY,
+            algorithms=[ALGORITHM]
+        )
+
+        return JWTPayload.model_validate(payload)
+
+    except (jwt.InvalidTokenError, ValueError):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token"
+        )
+
+    except ValidationError:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid token payload"
+        )
 
 
 @app.get("/users", response_model=list[UserResponse])
@@ -97,13 +155,37 @@ def register_user(user: RegisterCredentials):
         username=user.username
     )
 
+@app.post("/users/login", response_model=JWTResponse)
+def login_user(credentials: LoginCredentials):
+    user = app.state.users.find_one({"username": credentials.username})
 
-@app.put("/users/{user_id}")
-def update_user(user_id: str, updates: UserUpdate):
-    if not ObjectId.is_valid(user_id):
-        raise HTTPException(status_code=400, detail="Invalid user ID")
+    if not user or not bcrypt.checkpw(
+            credentials.password.encode("utf-8"),
+            user["password_hash"].encode("utf-8")
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password"
+        )
+
+    token = create_access_token(
+        str(user["_id"]),
+        user.get("role", "user")
+    )
+
+    return JWTResponse(
+        access_token=token,
+        token_type="bearer"
+    )
+
+@app.put("/users/update")
+def update_user(updates: UserUpdate, current_user: JWTPayload = Depends(get_current_user)):
+    user_id = current_user.sub
 
     update_data = updates.model_dump(exclude_unset=True, exclude_none=True)
+
+    # Prevent changing role
+    update_data.pop("role", None)
 
     if "password" in update_data:
         update_data["password_hash"] = bcrypt.hashpw(
@@ -127,17 +209,14 @@ def update_user(user_id: str, updates: UserUpdate):
 
     return {"message": "User updated successfully"}
 
-
-@app.post("/users/login")
-def login(credentials: LoginCredentials):
-    # JWT authentication will be implemented here.
-    pass
-
-
 @app.post("/users/authenticate")
-def authenticate():
-    # JWT token validation will be implemented here.
-    pass
+def authenticate(current_user: JWTPayload = Depends(get_current_user)):
+    return AuthenticateResponse(
+        authenticated=True,
+        user_id=current_user.sub,
+        role=current_user.role
+    )
+
 
 if __name__ == "__main__":
     import uvicorn

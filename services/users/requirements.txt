@@ -4,3 +4,4 @@ uvicorn==0.54.0
 pymongo==4.15.3
 bcrypt==4.2.1
 python-dotenv==1.2.1
+PyJWT==2.15.1
