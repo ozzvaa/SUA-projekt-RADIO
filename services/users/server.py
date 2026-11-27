@@ -139,7 +139,7 @@ def authenticate():
     # JWT token validation will be implemented here.
     pass
 
-    if __name__ == "__main__":
-        import uvicorn
+if __name__ == "__main__":
+    import uvicorn
 
-        uvicorn.run("server:app", host="0.0.0.0", port=8000)
+    uvicorn.run("server:app", host="0.0.0.0", port=8000)
