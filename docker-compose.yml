@@ -25,15 +25,16 @@ services:
     ports:
       - "${USERS_DATABASE_PORT:-7001}:27017"
     volumes:
-      - mongo_data:/data/db
+      - users_mongo_data:/data/db
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      test:
+        ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
       interval: 5s
       timeout: 3s
       retries: 10
     networks:
       - sua-services-network
-  
+
   users-api:
     build: ./services/users
     restart: unless-stopped
@@ -47,9 +48,39 @@ services:
     depends_on:
       users-db:
         condition: service_healthy
-  
+
+  ads-db:
+    image: mongo:8
+    restart: unless-stopped
+    ports:
+      - "${ADS_DATABASE_PORT:-7002}:27017"
+    volumes:
+      - ads_mongo_data:/data/db
+    healthcheck:
+      test:
+        ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - sua-services-network
+
+  ads-api:
+    build: ./services/ads
+    restart: unless-stopped
+    environment:
+      ADS_DATABASE_URL: ${ADS_DATABASE_URL:-mongodb://ads-db:27017/ads_db}
+    ports:
+      - "${ADS_API_PORT:-9002}:8000"
+    networks:
+      - sua-services-network
+    depends_on:
+      ads-db:
+        condition: service_healthy
+
 volumes:
-  mongo_data:
+  users_mongo_data:
+  ads_mongo_data:
 
 networks:
   sua-services-network:
