@@ -201,6 +201,43 @@ def login_user(credentials: LoginCredentials):
     )
 
 
+@app.post("/users/authenticate")
+def authenticate(current_user: JWTPayload = Depends(get_current_user)):
+    return AuthenticateResponse(
+        authenticated=True,
+        user_id=current_user.sub,
+        role=current_user.role
+    )
+
+
+@app.post("/users/refresh", response_model=JWTResponse)
+def refresh_token(current_user: JWTPayload = Depends(get_current_user)):
+    user_id = current_user.sub
+
+    if not ObjectId.is_valid(user_id):
+        raise HTTPException(status_code=401, detail="Invalid user ID in token")
+
+    user = app.state.users.find_one({"_id": ObjectId(user_id)}, {"password_hash": 0})
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    token = create_access_token(user_id, current_user.role)
+    app.state.tokens.delete_many({"user_id": str(user_id)})
+    app.state.tokens.insert_one({
+        "token": token,
+        "user_id": str(user_id),
+        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    })
+
+    return JWTResponse(
+        message="Token refreshed successfully",
+        username=user["username"],
+        access_token=token,
+        token_type="bearer"
+    )
+
+
 @app.put("/users/update")
 def update_user(updates: UserUpdate, current_user: JWTPayload = Depends(get_current_user)):
     user_id = current_user.sub
@@ -252,15 +289,6 @@ def update_role(new_role: Literal["user", "station"], current_user: JWTPayload =
         raise HTTPException(status_code=404, detail="User not found")
 
     return {"message": "Role updated successfully"}
-
-
-@app.post("/users/authenticate")
-def authenticate(current_user: JWTPayload = Depends(get_current_user)):
-    return AuthenticateResponse(
-        authenticated=True,
-        user_id=current_user.sub,
-        role=current_user.role
-    )
 
 
 @app.delete("/users/logout")
