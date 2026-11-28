@@ -39,6 +39,11 @@ async def lifespan(app: FastAPI):
     app.state.mongo_client.admin.command("ping")
     app.state.users = app.state.mongo_client.get_database()["users"]
     app.state.users.create_index("username", unique=True)
+    app.state.tokens = app.state.mongo_client.get_database()["tokens"]
+    app.state.tokens.create_index(
+        "expires_at",
+        expireAfterSeconds=0
+    )
     yield
     app.state.mongo_client.close()
 
@@ -54,7 +59,6 @@ app.add_middleware(
 
 def create_access_token(user_id: str, role: str) -> str:
     iat = datetime.now(timezone.utc)
-
     expire = iat + timedelta(
         minutes=ACCESS_TOKEN_EXPIRE_MINUTES
     )
@@ -73,14 +77,21 @@ def get_current_user(
         credentials: HTTPAuthorizationCredentials = Depends(security)
 ) -> JWTPayload:
     try:
+        token = credentials.credentials
+
         payload = jwt.decode(
-            credentials.credentials,
+            token,
             SECRET_KEY,
             algorithms=[ALGORITHM],
             options={"require": ["sub", "exp", "iat", "role"]}
         )
 
-        return JWTPayload.model_validate(payload)
+        validated = JWTPayload.model_validate(payload)
+
+        if not app.state.tokens.find_one({"token": token}):
+            raise HTTPException(status_code=401, detail="Token revoked")
+
+        return validated
 
     except (jwt.InvalidTokenError, ValueError):
         raise HTTPException(
@@ -155,6 +166,7 @@ def register_user(user: RegisterCredentials):
         username=user.username
     )
 
+
 @app.post("/users/login", response_model=JWTResponse)
 def login_user(credentials: LoginCredentials):
     user = app.state.users.find_one({"username": credentials.username})
@@ -173,12 +185,21 @@ def login_user(credentials: LoginCredentials):
         user.get("role", "user")
     )
 
+    app.state.tokens.delete_many({"user_id": str(user["_id"])})
+
+    app.state.tokens.insert_one({
+        "token": token,
+        "user_id": str(user["_id"]),
+        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    })
+
     return JWTResponse(
         message="User logged in successfully",
         username=user["username"],
         access_token=token,
         token_type="bearer"
     )
+
 
 @app.put("/users/update")
 def update_user(updates: UserUpdate, current_user: JWTPayload = Depends(get_current_user)):
@@ -214,6 +235,7 @@ def update_user(updates: UserUpdate, current_user: JWTPayload = Depends(get_curr
 
     return {"message": "User updated successfully"}
 
+
 @app.put("/users/change_role")
 def update_role(new_role: Literal["user", "station"], current_user: JWTPayload = Depends(get_current_user)):
     user_id = current_user.sub
@@ -232,7 +254,6 @@ def update_role(new_role: Literal["user", "station"], current_user: JWTPayload =
     return {"message": "Role updated successfully"}
 
 
-
 @app.post("/users/authenticate")
 def authenticate(current_user: JWTPayload = Depends(get_current_user)):
     return AuthenticateResponse(
@@ -240,6 +261,30 @@ def authenticate(current_user: JWTPayload = Depends(get_current_user)):
         user_id=current_user.sub,
         role=current_user.role
     )
+
+
+@app.delete("/users/logout")
+def logout_user(current_user: JWTPayload = Depends(get_current_user)):
+    app.state.tokens.delete_many({"user_id": current_user.sub})
+
+    return {"message": "Logged out successfully"}
+
+
+@app.delete("/users/delete")
+def delete_user(current_user: JWTPayload = Depends(get_current_user)):
+    user_id = current_user.sub
+
+    if not ObjectId.is_valid(user_id):
+        raise HTTPException(status_code=401, detail="Invalid user ID in token")
+
+    result = app.state.users.delete_one(
+        {"_id": ObjectId(user_id)}
+    )
+
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {"message": "User deleted successfully"}
 
 
 if __name__ == "__main__":
