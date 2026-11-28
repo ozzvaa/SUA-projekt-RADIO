@@ -64,13 +64,16 @@ async def lifespan(app: FastAPI):
 
     # Select database
 
-
     app.state.ads = app.state.mongo_client.get_database()["ads"]
     app.state.cost_classes = app.state.mongo_client.get_database()["ad_cost_classes"]
     app.state.tags = app.state.mongo_client.get_database()["ad_tags"]
 
     app.state.users_api = httpx.Client(
-        base_url=f"http://users-api:8000",
+        base_url=os.getenv("USERS_API_URL", "http://users-api:8000"),
+        timeout=5.0
+    )
+    app.state.payments_api = httpx.Client(
+        base_url=os.getenv("PAYMENTS_API_URL", "http://payments-api:8000"),
         timeout=5.0
     )
 
@@ -78,6 +81,7 @@ async def lifespan(app: FastAPI):
     seed_database(app.state.mongo_client.get_database())
     yield
     app.state.users_api.close()
+    app.state.payments_api.close()
     app.state.mongo_client.close()
 
 
@@ -216,6 +220,52 @@ def update_ad(
     if updates:
         app.state.ads.update_one({"_id": ad_id_object}, {"$set": updates})
 
+    updated_ad = app.state.ads.find_one({"_id": ad_id_object})
+    return Ad(id=str(updated_ad.pop("_id")), **updated_ad)
+
+
+@app.post("/ads/submit/{ad_id}", response_model=Ad)
+def submit_ad(
+        ad_id: str,
+        authentication: AuthenticateResponse = Depends(get_current_user),
+):
+    if not ObjectId.is_valid(ad_id):
+        raise HTTPException(status_code=404, detail="Advertisement not found")
+
+    ad_id_object = ObjectId(ad_id)
+    ad = app.state.ads.find_one({"_id": ad_id_object})
+    if ad is None or ad.get("owner_id") != str(authentication.user_id):
+        raise HTTPException(status_code=404, detail="Advertisement not found")
+
+    if ad.get("status", "draft") != "draft":
+        raise HTTPException(status_code=409, detail="Only draft advertisements can be submitted for publishing")
+
+    cost_class_id = ad.get("cost_class_id")
+    cost_class = app.state.cost_classes.find_one({"id": cost_class_id}) if cost_class_id else None
+    if cost_class is None:
+        raise HTTPException(status_code=400, detail="A valid cost class is required to publish an advertisement")
+
+    try:
+        # TODO Integrate with payments
+        payment_response = app.state.payments_api.post(
+            "/payments",
+            json={
+                "ad_id": str(ad_id_object),
+                "user_id": str(authentication.user_id),
+                "amount": cost_class["price"]
+            },
+            headers={"Idempotency-Key": str(ad_id_object)}
+        )
+        payment_response.raise_for_status()
+    except httpx.HTTPStatusError:
+        raise HTTPException(status_code=502, detail="Payments service rejected the payment request")
+    except httpx.RequestError:
+        raise HTTPException(status_code=503, detail="Payments service unavailable")
+
+    app.state.ads.update_one(
+        {"_id": ad_id_object, "status": "draft"},
+        {"$set": {"status": "pending"}}
+    )
     updated_ad = app.state.ads.find_one({"_id": ad_id_object})
     return Ad(id=str(updated_ad.pop("_id")), **updated_ad)
 

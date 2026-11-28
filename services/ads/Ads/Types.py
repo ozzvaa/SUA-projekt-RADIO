@@ -47,6 +47,21 @@ class CreateAd(BaseModel):
 
 
 class UpdateAd(BaseModel):
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "title": "New updated title",
+                    "description": "New better description",
+                    "content": "Something even better than before!",
+                    "tags": ["tag_events"],
+                    "cost_class_id": "cost_long",
+                    "expiration_date": 1798761600
+                }
+            ]
+        }
+    }
+
     title: Optional[str] = None
     description: Optional[str] = None
     content: Optional[str] = None

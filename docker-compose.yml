@@ -70,6 +70,7 @@ services:
     restart: unless-stopped
     environment:
       ADS_DATABASE_URL: ${ADS_DATABASE_URL:-mongodb://ads-db:27017/ads_db}
+      PAYMENTS_API_URL: ${PAYMENTS_API_URL:-http://payments-api:8000}
     ports:
       - "${ADS_API_PORT:-9002}:8000"
     networks:

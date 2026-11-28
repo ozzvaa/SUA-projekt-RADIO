@@ -75,6 +75,47 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
+  /ads/publish/{ad_id}:
+    post:
+      tags: [Advertisements]
+      operationId: publishAd
+      summary: Submit an owned advertisement for publishing
+      description: Starts a payment request. The advertisement becomes pending after the payments service accepts the request.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '200':
+          description: Advertisement submitted and pending payment confirmation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ad' }
+        '400':
+          description: A valid cost class is required
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: Advertisement not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '409':
+          description: Advertisement is not in draft status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '502':
+          description: Payments service rejected the request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '503':
+          description: Payments service unavailable
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
   /ads/{ad_id}:
     get:
       tags: [Advertisements]
