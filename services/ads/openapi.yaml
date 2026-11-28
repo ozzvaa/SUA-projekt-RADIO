@@ -13,46 +13,105 @@ paths:
     get:
       tags: [Advertisements]
       operationId: listAds
-      summary: List advertisements
+      summary: List published advertisements
+      parameters:
+        - name: tag_id
+          in: query
+          required: false
+          description: Filter advertisements by tag ID.
+          schema:
+            type: string
+            enum: [tag_food, tag_sport, tag_technology, tag_culture, tag_events]
+        - name: cost_class_id
+          in: query
+          required: false
+          description: Filter advertisements by cost class ID.
+          schema:
+            type: string
+            enum: [cost_short, cost_medium, cost_long]
       responses:
         '200':
           description: List of advertisements
           content:
-            application/json: {}
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AdResponse' }
+  /ads/list:
+    get:
+      tags: [Advertisements]
+      operationId: listMyAds
+      summary: List advertisements owned by the authenticated user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The user's advertisements
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Ad' }
+  /ads/create:
     post:
       tags: [Advertisements]
       operationId: createAd
       summary: Add an advertisement
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
-          application/json: {}
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAd' }
       responses:
         '201':
           description: Advertisement created
           content:
-            application/json: {}
+            application/json:
+              schema: { $ref: '#/components/schemas/Ad' }
         '400':
           description: Invalid advertisement data
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
-  /ads/{id}:
+  /ads/{ad_id}:
+    get:
+      tags: [Advertisements]
+      operationId: getAd
+      summary: Get advertisement details
+      parameters:
+        - $ref: '#/components/parameters/ResourceId'
+      responses:
+        '200':
+          description: Advertisement details
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ad' }
+        '404':
+          description: Advertisement not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
     put:
       tags: [Advertisements]
       operationId: updateAd
-      summary: Replace an advertisement
+      summary: Update fields on an owned advertisement
+      security:
+        - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/ResourceId'
       requestBody:
         required: true
         content:
-          application/json: {}
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateAd' }
       responses:
         '200':
           description: Advertisement updated
           content:
-            application/json: {}
+            application/json:
+              schema: { $ref: '#/components/schemas/Ad' }
         '404':
           description: Advertisement not found
           content:
@@ -72,15 +131,109 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
+  /ads/tags:
+    get:
+      tags: [Advertisements]
+      operationId: listAdTags
+      summary: List available advertisement tags
+      responses:
+        '200':
+          description: Available tags
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Tag' }
+  /ads/cost_classes:
+    get:
+      tags: [Advertisements]
+      operationId: listAdCostClasses
+      summary: List available advertisement cost classes
+      responses:
+        '200':
+          description: Available cost classes
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/CostClass' }
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
   parameters:
     ResourceId:
-      name: id
+      name: ad_id
       in: path
       required: true
       schema: { type: string }
       description: Advertisement identifier.
   schemas:
+    Ad:
+      type: object
+      required: [id, owner_id, title]
+      properties:
+        id: { type: string }
+        owner_id: { type: string }
+        title: { type: string }
+        description: { type: [string, 'null'] }
+        content: { type: [string, 'null'] }
+        status: { type: string, enum: [draft, pending, published, expired] }
+        tags:
+          type: array
+          items: { type: string }
+        cost_class_id: { type: [string, 'null'] }
+        expiration_date: { type: [integer, 'null'] }
+    AdResponse:
+      type: object
+      required: [id, title]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        description: { type: [string, 'null'] }
+        tags:
+          type: array
+          items: { type: string }
+        cost_class_id: { type: [string, 'null'] }
+    CreateAd:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string }
+        description: { type: [string, 'null'] }
+        content: { type: [string, 'null'] }
+        tags:
+          type: array
+          items: { type: string }
+        cost_class_id: { type: [string, 'null'] }
+        expiration_date: { type: [integer, 'null'] }
+    UpdateAd:
+      type: object
+      properties:
+        title: { type: string, minLength: 1 }
+        description: { type: [string, 'null'] }
+        content: { type: [string, 'null'] }
+        tags:
+          type: array
+          items: { type: string }
+        cost_class_id: { type: [string, 'null'] }
+        expiration_date: { type: [integer, 'null'] }
+    Tag:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+    CostClass:
+      type: object
+      required: [id, title, min_duration_seconds, max_duration_seconds, price]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        min_duration_seconds: { type: integer }
+        max_duration_seconds: { type: integer }
+        price: { type: number }
     Error:
       type: object
       required: [message]

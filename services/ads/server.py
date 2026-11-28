@@ -1,13 +1,15 @@
 import os
+from typing import Literal, Optional
 
 import httpx
-from fastapi import FastAPI, HTTPException, status, Depends
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pymongo import MongoClient
+from bson import ObjectId
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 
-from Ads.Types import CreateAd, JWTPayload, TagModel, Ad, AuthenticateResponse
+from Ads.Types import CreateAd, UpdateAd, TagModel, CostClass, Ad, AuthenticateResponse, AdResponse
 from Ads.Seed import seed_database
 
 security = HTTPBearer()
@@ -88,18 +90,6 @@ app.add_middleware(
 )
 
 
-@app.get("/ping")
-def ping():
-    return {"ping": "pong"}
-
-
-@app.get("/ping/users")
-def ping_users():
-    response = app.state.users_api.get("/users")
-    response.raise_for_status()
-    return response.json()
-
-
 @app.get("/ads/tags", response_model=list[TagModel])
 def get_tags():
     tags = app.state.tags.find(
@@ -116,7 +106,53 @@ def get_tags():
     ]
 
 
-@app.post("/ads", status_code=201, response_model=Ad)
+@app.get("/ads/cost_classes", response_model=list[CostClass])
+def get_cost_classes():
+    cost_classes = app.state.cost_classes.find(
+        {},
+        {"_id": 0}
+    )
+
+    return [CostClass(**cost_class) for cost_class in cost_classes]
+
+
+@app.get("/ads", response_model=list[AdResponse])
+def list_published_ads(
+        tag_id: Optional[Literal["tag_food", "tag_sport", "tag_technology", "tag_culture", "tag_events"]] = None,
+        cost_class_id: Optional[Literal["cost_short", "cost_medium", "cost_long"]] = None
+):
+    filters = {"status": "published"}
+    if tag_id is not None:
+        filters["tags"] = tag_id
+    if cost_class_id is not None:
+        filters["cost_class_id"] = cost_class_id
+
+    ads = app.state.ads.find(filters)
+    return [
+        AdResponse(id=str(ad.pop("_id")), **ad)
+        for ad in ads
+    ]
+
+
+@app.get("/ads/list", response_model=list[Ad])
+def list_my_ads(authentication: AuthenticateResponse = Depends(get_current_user)):
+    ads = app.state.ads.find({"owner_id": str(authentication.user_id)})
+    return [Ad(id=str(ad.pop("_id")), **ad) for ad in ads]
+
+
+@app.get("/ads/{ad_id}", response_model=Ad)
+def get_ad(ad_id: str):
+    if not ObjectId.is_valid(ad_id):
+        raise HTTPException(status_code=404, detail="Advertisement not found")
+
+    ad = app.state.ads.find_one({"_id": ObjectId(ad_id)})
+    if ad is None:
+        raise HTTPException(status_code=404, detail="Advertisement not found")
+
+    return Ad(id=str(ad.pop("_id")), **ad)
+
+
+@app.post("/ads/create", status_code=201, response_model=Ad)
 def create_ad(new_ad: CreateAd, authentication: AuthenticateResponse = Depends(get_current_user)):
     available_tags = {
         tag["id"]
@@ -143,6 +179,45 @@ def create_ad(new_ad: CreateAd, authentication: AuthenticateResponse = Depends(g
     ad["id"] = str(result.inserted_id)
 
     return Ad(**ad)
+
+
+@app.put("/ads/{ad_id}", response_model=Ad)
+def update_ad(
+        ad_id: str,
+        update: UpdateAd,
+        authentication: AuthenticateResponse = Depends(get_current_user)
+):
+    if not ObjectId.is_valid(ad_id):
+        raise HTTPException(status_code=404, detail="Advertisement not found")
+
+    ad_id_object = ObjectId(ad_id)
+    ad = app.state.ads.find_one({"_id": ad_id_object})
+    if ad is None or ad.get("owner_id") != str(authentication.user_id):
+        raise HTTPException(status_code=404, detail="Advertisement not found")
+
+    updates = update.model_dump(exclude_unset=True)
+    if "title" in updates and (updates["title"] is None or not updates["title"].strip()):
+        raise HTTPException(status_code=400, detail="Title must not be empty")
+
+    if "tags" in updates:
+        available_tags = {tag["id"] for tag in app.state.tags.find({}, {"id": 1})}
+        invalid_tags = set(updates["tags"]) - available_tags
+        if invalid_tags:
+            raise HTTPException(status_code=400, detail=f"Invalid tag IDs: {list(invalid_tags)}")
+
+    if "cost_class_id" in updates and updates["cost_class_id"] is not None:
+        available_cost_classes = {
+            cost_class["id"]
+            for cost_class in app.state.cost_classes.find({}, {"id": 1})
+        }
+        if updates["cost_class_id"] not in available_cost_classes:
+            raise HTTPException(status_code=400, detail="Invalid cost class ID")
+
+    if updates:
+        app.state.ads.update_one({"_id": ad_id_object}, {"$set": updates})
+
+    updated_ad = app.state.ads.find_one({"_id": ad_id_object})
+    return Ad(id=str(updated_ad.pop("_id")), **updated_ad)
 
 
 if __name__ == "__main__":

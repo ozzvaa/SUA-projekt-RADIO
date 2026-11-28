@@ -7,12 +7,19 @@ class Ad(BaseModel):
     owner_id: str
     title: str
 
-    description: Optional[str]
-    content: Optional[str]
+    description: Optional[str] = None
+    content: Optional[str] = None
     status: Literal["draft", "pending", "published", "expired"] = "draft"
     tags: list[str] = Field(default_factory=list)
-    cost_class_id: Optional[str]
-    expiration_date: Optional[int]
+    cost_class_id: Optional[str] = None
+    expiration_date: Optional[int] = None
+
+class AdResponse(BaseModel):
+    id: str
+    title: str
+    description: Optional[str] = None
+    tags: list[str] = Field(default_factory=list)
+    cost_class_id: Optional[str] = None
 
 
 class CreateAd(BaseModel):
